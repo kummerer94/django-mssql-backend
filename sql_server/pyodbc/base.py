@@ -247,6 +247,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         options = conn_params.get('OPTIONS', {})
         driver = options.get('driver', 'ODBC Driver 13 for SQL Server')
         dsn = options.get('dsn', None)
+        auth = options.get('Authentication', None)
 
         # Microsoft driver names assumed here are:
         # * SQL Server Native Client 10.0/11.0
@@ -291,6 +292,16 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
         if ms_drivers.match(driver) and os.name == 'nt':
             cstr_parts['MARS_Connection'] = 'yes'
+        
+        # User may want to use Azure AD Interactive connection option
+        # It the user specified active directory interactive auth,
+        # we neet to make sure pwd is not set and the connection is not
+        # trusted as otherwise the driver will refuse to connect
+        if auth:
+            cstr_parts['Authentication'] = auth
+            if auth == 'ActiveDirectoryInteractive':
+                cstr_parts.pop('PWD')
+                cstr_parts['Trusted_Connection'] = 'no'
 
         connstr = encode_connection_string(cstr_parts)
 
