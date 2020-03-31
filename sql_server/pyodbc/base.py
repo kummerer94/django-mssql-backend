@@ -300,6 +300,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         if auth:
             cstr_parts['Authentication'] = auth
             if auth == 'ActiveDirectoryInteractive':
+                cstr_parts.setdefault('UID', '')
                 cstr_parts.pop('PWD', '')
                 cstr_parts['Trusted_Connection'] = 'no'
 
