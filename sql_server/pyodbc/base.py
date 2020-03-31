@@ -292,7 +292,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
         if ms_drivers.match(driver) and os.name == 'nt':
             cstr_parts['MARS_Connection'] = 'yes'
-        
+
         # User may want to use Azure AD Interactive connection option
         # It the user specified active directory interactive auth,
         # we neet to make sure pwd is not set and the connection is not
