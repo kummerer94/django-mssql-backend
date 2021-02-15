@@ -1,11 +1,18 @@
 import binascii
 import datetime
+import django
 
 from django.db.backends.base.schema import (
-    BaseDatabaseSchemaEditor, logger, _is_relevant_relation, _related_non_m2m_objects,
+    BaseDatabaseSchemaEditor,
+    _is_relevant_relation,
+    _related_non_m2m_objects,
+    logger,
 )
 from django.db.backends.ddl_references import (
-    Columns, IndexName, Statement as DjStatement, Table,
+    Columns,
+    IndexName,
+    Statement as DjStatement,
+    Table,
 )
 from django.db.models import Index
 from django.db.models.fields import AutoField, BigAutoField
@@ -454,21 +461,30 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # True               | True             | True               | False
         if (not old_field.db_index or old_field.unique) and new_field.db_index and not new_field.unique:
             self.execute(self._create_index_sql(model, [new_field]))
-        # Restore an index, SQL Server requires explicit restoration
+
+        # Restore indexes & unique constraints deleted above, SQL Server requires explicit restoration
         if (old_type != new_type or (old_field.null and not new_field.null)) and (
             old_field.column == new_field.column
         ):
-            unique_columns = []
+            # Restore unique constraints
+            # Note: if nullable they are implemented via an explicit filtered UNIQUE INDEX (not CONSTRAINT)
+            # in order to get ANSI-compliant NULL behaviour (i.e. NULL != NULL, multiple are allowed)
             if old_field.unique and new_field.unique:
-                unique_columns.append([old_field.column])
+                if new_field.null:
+                    self.execute(
+                        self._create_index_sql(
+                            model, [old_field], sql=self.sql_create_unique_null, suffix="_uniq"
+                        )
+                    )
+                else:
+                    self.execute(self._create_unique_sql(model, columns=[old_field.column]))
             else:
                 for fields in model._meta.unique_together:
                     columns = [model._meta.get_field(field).column for field in fields]
                     if old_field.column in columns:
-                        unique_columns.append(columns)
-            if unique_columns:
-                for columns in unique_columns:
-                    self.execute(self._create_unique_sql(model, columns))
+                        condition = ' AND '.join(["[%s] IS NOT NULL" % col for col in columns])
+                        self.execute(self._create_unique_sql(model, columns, condition=condition))
+            # Restore indexes
             index_columns = []
             if old_field.db_index and new_field.db_index:
                 index_columns.append([old_field])
@@ -662,7 +678,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         if self.connection.features.connection_persists_old_columns:
             self.connection.close()
 
-    def _create_unique_sql(self, model, columns, name=None, condition=None):
+    def _create_unique_sql(self, model, columns, name=None, condition=None, deferrable=None):
+        if (deferrable and not getattr(self.connection.features, 'supports_deferrable_unique_constraints', False)):
+            return None
+
         def create_unique_name(*args, **kwargs):
             return self.quote_name(self._create_index_name(*args, **kwargs))
 
@@ -672,6 +691,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         else:
             name = self.quote_name(name)
         columns = Columns(table, columns, self.quote_name)
+        statement_args = {
+            "deferrable": self._deferrable_constraint_sql(deferrable)
+        } if django.VERSION >= (3, 1) else {}
+
         if condition:
             return Statement(
                 self.sql_create_unique_index,
@@ -679,6 +702,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 name=name,
                 columns=columns,
                 condition=' WHERE ' + condition,
+                **statement_args
             ) if self.connection.features.supports_partial_indexes else None
         else:
             return Statement(
@@ -686,6 +710,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 table=table,
                 name=name,
                 columns=columns,
+                **statement_args
             )
 
     def _create_index_sql(self, model, fields, *, name=None, suffix='', using='',
@@ -926,7 +951,8 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 })
         # Drop unique constraints, SQL Server requires explicit deletion
         for name, infodict in constraints.items():
-            if field.column in infodict['columns'] and infodict['unique'] and not infodict['primary_key']:
+            if (field.column in infodict['columns'] and infodict['unique'] and
+                    not infodict['primary_key'] and not infodict['index']):
                 self.execute(self.sql_delete_unique % {
                     "table": self.quote_name(model._meta.db_table),
                     "name": self.quote_name(name),

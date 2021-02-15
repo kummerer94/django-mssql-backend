@@ -41,19 +41,25 @@ matrix:
 
     - { before_install: *linux_before_install, python: "3.6", os: linux, env: TOX_ENV=py36-django22 }
     - { before_install: *linux_before_install, python: "3.6", os: linux, env: TOX_ENV=py36-django30 }
+    - { before_install: *linux_before_install, python: "3.6", os: linux, env: TOX_ENV=py36-django31 }
 
     - { before_install: *linux_before_install, python: "3.7", os: linux, env: TOX_ENV=py37-django22 }
     - { before_install: *linux_before_install, python: "3.7", os: linux, env: TOX_ENV=py37-django30 }
+    - { before_install: *linux_before_install, python: "3.7", os: linux, env: TOX_ENV=py37-django31 }
 
     - { before_install: *linux_before_install, python: "3.8", os: linux, env: TOX_ENV=py38-django30 }
+    - { before_install: *linux_before_install, python: "3.8", os: linux, env: TOX_ENV=py38-django31 }
 
     - { before_install: *win_before_install, language: sh, python: "3.6", os: windows, env: TOX_ENV=py36-django22 }
     - { before_install: *win_before_install, language: sh, python: "3.6", os: windows, env: TOX_ENV=py36-django30 }
+    - { before_install: *win_before_install, language: sh, python: "3.6", os: windows, env: TOX_ENV=py36-django31 }
 
     - { before_install: *win_before_install, language: sh, python: "3.7", os: windows, env: TOX_ENV=py37-django22 }
     - { before_install: *win_before_install, language: sh, python: "3.7", os: windows, env: TOX_ENV=py37-django30 }
+    - { before_install: *win_before_install, language: sh, python: "3.7", os: windows, env: TOX_ENV=py37-django31 }
 
     - { before_install: *win_before_install, language: sh, python: "3.8", os: windows, env: TOX_ENV=py38-django30 }
+    - { before_install: *win_before_install, language: sh, python: "3.8", os: windows, env: TOX_ENV=py38-django31 }
 
 
 

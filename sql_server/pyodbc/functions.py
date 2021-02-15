@@ -1,7 +1,7 @@
 from django import VERSION
 from django.db.models import BooleanField
 from django.db.models.functions import Cast
-from django.db.models.functions.math import ATan2, Log, Ln, Round
+from django.db.models.functions.math import ATan2, Log, Ln, Mod, Round
 from django.db.models.expressions import Case, Exists, OrderBy, When
 from django.db.models.lookups import Lookup
 
@@ -10,6 +10,34 @@ DJANGO3 = VERSION[0] >= 3
 
 class TryCast(Cast):
     function = 'TRY_CAST'
+
+
+def sqlserver_as_sql(self, compiler, connection, template=None, **extra_context):
+    template = template or self.template
+    if connection.features.supports_order_by_nulls_modifier:
+        if self.nulls_last:
+            template = '%s NULLS LAST' % template
+        elif self.nulls_first:
+            template = '%s NULLS FIRST' % template
+    else:
+        if self.nulls_last and not (
+            self.descending and connection.features.order_by_nulls_first
+        ) and connection.features.supports_order_by_is_nulls:
+            template = '%%(expression)s IS NULL, %s' % template
+        elif self.nulls_first and not (
+            not self.descending and connection.features.order_by_nulls_first
+        ) and connection.features.supports_order_by_is_nulls:
+            template = '%%(expression)s IS NOT NULL, %s' % template
+    connection.ops.check_expression_support(self)
+    expression_sql, params = compiler.compile(self.expression)
+    placeholders = {
+        'expression': expression_sql,
+        'ordering': 'DESC' if self.descending else 'ASC',
+        **extra_context,
+    }
+    template = template or self.template
+    params *= template.count('%(expression)s')
+    return (template % placeholders).rstrip(), params
 
 
 def sqlserver_atan2(self, compiler, connection, **extra_context):
@@ -24,6 +52,10 @@ def sqlserver_log(self, compiler, connection, **extra_context):
 
 def sqlserver_ln(self, compiler, connection, **extra_context):
     return self.as_sql(compiler, connection, function='LOG', **extra_context)
+
+
+def sqlserver_mod(self, compiler, connection, **extra_context):
+    return self.as_sql(compiler, connection, template='%(expressions)s', arg_joiner='%%', **extra_context)
 
 
 def sqlserver_round(self, compiler, connection, **extra_context):
@@ -77,6 +109,7 @@ def sqlserver_orderby(self, compiler, connection):
 ATan2.as_microsoft = sqlserver_atan2
 Log.as_microsoft = sqlserver_log
 Ln.as_microsoft = sqlserver_ln
+Mod.as_microsoft = sqlserver_mod
 Round.as_microsoft = sqlserver_round
 
 if DJANGO3:
@@ -85,3 +118,4 @@ else:
     Exists.as_microsoft = sqlserver_exists
 
 OrderBy.as_microsoft = sqlserver_orderby
+OrderBy.as_sql = sqlserver_as_sql

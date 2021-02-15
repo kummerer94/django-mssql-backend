@@ -3,6 +3,8 @@ from django.utils.functional import cached_property
 
 
 class DatabaseFeatures(BaseDatabaseFeatures):
+    can_introspect_json_field = False
+    has_native_json_field = False
     has_native_uuid_field = False
     allow_sliced_subqueries_with_in = False
     can_introspect_autofield = True
@@ -22,6 +24,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     requires_literal_defaults = True
     requires_sqlparse_for_splitting = False
     supports_boolean_expr_in_select_clause = False
+    supports_deferrable_unique_constraints = False
     supports_ignore_conflicts = False
     supports_index_on_text_field = False
     supports_paramstyle_pyformat = False
@@ -33,6 +36,9 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_timezones = False
     supports_transactions = True
     uses_savepoints = True
+    supports_order_by_nulls_modifier = False
+    supports_order_by_is_nulls = False
+    order_by_nulls_first = True
 
     @cached_property
     def has_bulk_insert(self):
@@ -53,3 +59,11 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     @cached_property
     def supports_functions_in_partial_indexes(self):
         return self.connection.sql_server_version > 2005
+
+    @cached_property
+    def introspected_field_types(self):
+        return {
+            **super().introspected_field_types,
+            'GenericIPAddressField': 'CharField',
+            'PositiveBigIntegerField': 'BigIntegerField'
+        }
